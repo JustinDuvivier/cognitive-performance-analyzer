@@ -8,6 +8,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
 from config import OPENWEATHER_API_KEY, OPENAQ_API_KEY, WEATHER_API_URL, LOCATION, REQUEST_TIMEOUT
+from loaders.load import get_pressure_24h_ago
 
 logger = logging.getLogger(__name__)
 
@@ -102,22 +103,13 @@ def calculate_pressure_change(current_pressure, current_timestamp):
     """Calculate pressure change from 24 hours ago"""
     if current_pressure is None:
         return 0
-    
-    # Import here to avoid circular dependency
-    import sys
-    import os
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if parent_dir not in sys.path:
-        sys.path.insert(0, parent_dir)
-    
-    from loaders.load import get_pressure_24h_ago
-    
+
     historical_pressure = get_pressure_24h_ago(current_timestamp)
-    
+
     if historical_pressure is None:
         logger.debug("No historical pressure data available, pressure_change_24h set to 0")
         return 0
-    
+
     pressure_change = current_pressure - historical_pressure
     logger.debug(f"Pressure change: {current_pressure} - {historical_pressure} = {pressure_change:.2f} hPa")
     return round(pressure_change, 2)

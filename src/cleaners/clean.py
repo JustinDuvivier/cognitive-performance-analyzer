@@ -117,7 +117,7 @@ def merge_and_clean(external_data, user_data):
         user_df.to_dict('records') if not user_df.empty else []
 
 
-def prepare_for_insert(record, table_name):
+def prepare_for_insert(record):
     """Final preparation before database insertion"""
     # Ensure all None values are properly handled for PostgreSQL
     prepared = {}
