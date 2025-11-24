@@ -1,18 +1,11 @@
-"""
-Data Source Registry - Extensible system for adding new data sources
-
-To add a new data source:
-1. Create a reader function that returns a list of records
-2. Register it in DATA_SOURCES with table_name, cleaner, and loader functions
-3. Add validation rules in validators/validate.py if needed
-"""
-
 from typing import Callable, List, Dict, Any, Optional
+import importlib
+import os
+
+import yaml
 
 
 class DataSource:
-    """Represents a data source configuration"""
-    
     def __init__(
         self,
         name: str,
@@ -20,7 +13,7 @@ class DataSource:
         table_name: str,
         cleaner: Callable[[Dict[str, Any]], Dict[str, Any]],
         loader: Callable[[List[Dict[str, Any]]], tuple],
-        validator_table: Optional[str] = None
+        validator_table: Optional[str] = None,
     ):
         self.name = name
         self.reader = reader
@@ -30,61 +23,61 @@ class DataSource:
         self.validator_table = validator_table or table_name
 
 
-# Import readers, cleaners, and loaders
-from readers.api_reader import fetch_all_external_data
-from readers.csv_reader import read_all_user_data
-from cleaners.clean import clean_external_factors, clean_user_tracking, prepare_for_insert
-from loaders.load import upsert_external_factors, insert_user_tracking
+def _resolve_callable(path: str) -> Callable:
+    module_path, func_name = path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, func_name)
 
 
-def _prepare_external_cleaner(record: Dict[str, Any]) -> Dict[str, Any]:
-    """Wrapper to clean and prepare external factors"""
-    cleaned = clean_external_factors(record)
-    return prepare_for_insert(cleaned, 'external_factors')
+def _load_data_source_configs() -> List[Dict[str, Any]]:
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(base_dir, "config", "data_sources.yaml")
+
+    if not os.path.exists(config_path):
+        return []
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f) or {}
+
+    return config.get("data_sources", [])
 
 
-def _prepare_user_cleaner(record: Dict[str, Any]) -> Dict[str, Any]:
-    """Wrapper to clean and prepare user tracking"""
-    cleaned = clean_user_tracking(record)
-    return prepare_for_insert(cleaned, 'user_tracking')
+def _build_data_source(config: Dict[str, Any]) -> DataSource:
+    name = config["name"]
+    table_name = config["table_name"]
+    validator_table = config.get("validator_table", table_name)
+
+    reader_callable = _resolve_callable(config["reader"])
+    cleaner_callable = _resolve_callable(config["cleaner"])
+    prepare_for_insert_callable = _resolve_callable(config["prepare_for_insert"])
+    loader_callable = _resolve_callable(config["loader"])
+
+    single_record = bool(config.get("single_record", False))
+
+    def wrapped_reader() -> List[Dict[str, Any]]:
+        data = reader_callable()
+        if single_record:
+            return [data] if data else []
+        return data or []
+
+    def wrapped_cleaner(record: Dict[str, Any]) -> Dict[str, Any]:
+        cleaned = cleaner_callable(record)
+        return prepare_for_insert_callable(cleaned)
+
+    return DataSource(
+        name=name,
+        reader=wrapped_reader,
+        table_name=table_name,
+        cleaner=wrapped_cleaner,
+        loader=loader_callable,
+        validator_table=validator_table,
+    )
 
 
-def _wrap_external_reader() -> List[Dict[str, Any]]:
-    """Wrapper to convert single record to list for consistency"""
-    data = fetch_all_external_data()
-    return [data] if data else []
+def _load_data_sources() -> List[DataSource]:
+    raw_configs = _load_data_source_configs()
+    return [_build_data_source(cfg) for cfg in raw_configs]
 
 
-# Registry of all data sources
-DATA_SOURCES: List[DataSource] = [
-    DataSource(
-        name='external_factors_api',
-        reader=_wrap_external_reader,
-        table_name='external_factors',
-        cleaner=_prepare_external_cleaner,
-        loader=upsert_external_factors,
-        validator_table='external_factors'
-    ),
-    DataSource(
-        name='user_tracking_csv',
-        reader=read_all_user_data,
-        table_name='user_tracking',
-        cleaner=_prepare_user_cleaner,
-        loader=insert_user_tracking,
-        validator_table='user_tracking'
-    ),
-]
-
-
-def get_data_source(name: str) -> Optional[DataSource]:
-    """Get a data source by name"""
-    for source in DATA_SOURCES:
-        if source.name == name:
-            return source
-    return None
-
-
-def list_data_sources() -> List[str]:
-    """List all registered data source names"""
-    return [source.name for source in DATA_SOURCES]
+DATA_SOURCES: List[DataSource] = _load_data_sources()
 

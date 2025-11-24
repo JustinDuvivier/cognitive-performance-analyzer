@@ -5,16 +5,24 @@ import sys
 import os
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, parent_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
-from config import OPENWEATHER_API_KEY, OPENAQ_API_KEY, WEATHER_API_URL, LOCATION, REQUEST_TIMEOUT
+from config import (
+    OPENWEATHER_API_KEY,
+    OPENAQ_API_KEY,
+    WEATHER_API_URL,
+    AIR_POLLUTION_API_URL,
+    LOCATION,
+    REQUEST_TIMEOUT,
+)
 from loaders.load import get_pressure_24h_ago
+from cleaners.clean import clean_timestamp
 
 logger = logging.getLogger(__name__)
 
 
 def fetch_weather_data():
-    """Fetch current weather data from OpenWeatherMap API"""
     try:
         params = {
             'lat': LOCATION['lat'],
@@ -28,15 +36,18 @@ def fetch_weather_data():
 
         data = response.json()
 
+        now = datetime.now()
+        timestamp_str = now.strftime("%Y-%m-%d %H:%M")
+
         weather_record = {
-            'timestamp': datetime.now(),
+            'timestamp': timestamp_str,
             'pressure_hpa': data['main'].get('pressure'),
             'temperature': data['main'].get('temp'),
             'humidity': data['main'].get('humidity'),
-            'hour_of_day': datetime.now().hour,
-            'day_of_week': datetime.now().isoweekday(),  # ISO: Monday=1, Sunday=7
-            'weekend': datetime.now().isoweekday() >= 6,  # Saturday=6, Sunday=7
-            'pressure_change_24h': None  # Will be calculated in fetch_all_external_data
+            'hour_of_day': now.hour,
+            'day_of_week': now.isoweekday(),
+            'weekend': now.isoweekday() >= 6,
+            'pressure_change_24h': None
         }
 
         return weather_record
@@ -47,7 +58,6 @@ def fetch_weather_data():
 
 
 def fetch_air_quality_data():
-    """Fetch air quality data from OpenAQ API v3"""
     aq_record = {'pm25': None, 'aqi': None}
 
     if not OPENAQ_API_KEY:
@@ -82,8 +92,47 @@ def fetch_air_quality_data():
     return aq_record
 
 
+def fetch_additional_pollutants():
+    pollutants = {
+        'co': None,
+        'no': None,
+        'no2': None,
+        'o3': None,
+        'so2': None,
+        'pm10': None,
+        'nh3': None,
+    }
+
+    if not OPENWEATHER_API_KEY:
+        return pollutants
+
+    try:
+        params = {
+            'lat': LOCATION['lat'],
+            'lon': LOCATION['lon'],
+            'appid': OPENWEATHER_API_KEY,
+        }
+
+        response = requests.get(AIR_POLLUTION_API_URL, params=params, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+
+        data = response.json()
+        items = data.get('list', [])
+        if not items:
+            return pollutants
+
+        components = items[0].get('components', {}) or {}
+        for key in pollutants.keys():
+            if key in components:
+                pollutants[key] = components[key]
+
+    except Exception as e:
+        logger.error(f"Error fetching detailed pollutants from OpenWeather: {e}")
+
+    return pollutants
+
+
 def calculate_aqi_from_pm25(pm25):
-    """Calculate AQI from PM2.5 concentration"""
     if pm25 is None:
         return None
 
@@ -100,11 +149,12 @@ def calculate_aqi_from_pm25(pm25):
 
 
 def calculate_pressure_change(current_pressure, current_timestamp):
-    """Calculate pressure change from 24 hours ago"""
     if current_pressure is None:
         return 0
 
-    historical_pressure = get_pressure_24h_ago(current_timestamp)
+    normalized_timestamp = clean_timestamp(current_timestamp)
+
+    historical_pressure = get_pressure_24h_ago(normalized_timestamp)
 
     if historical_pressure is None:
         logger.debug("No historical pressure data available, pressure_change_24h set to 0")
@@ -116,22 +166,22 @@ def calculate_pressure_change(current_pressure, current_timestamp):
 
 
 def fetch_all_external_data():
-    """Fetch all external data and combine into single record"""
     weather_data = fetch_weather_data()
     aq_data = fetch_air_quality_data()
+    pollutant_data = fetch_additional_pollutants()
 
-    if weather_data:
-        weather_data.update(aq_data)
-        
-        # Calculate pressure change from 24 hours ago
-        current_pressure = weather_data.get('pressure_hpa')
-        current_timestamp = weather_data.get('timestamp')
-        if current_pressure and current_timestamp:
-            weather_data['pressure_change_24h'] = calculate_pressure_change(
-                current_pressure, 
-                current_timestamp
-            )
-        
-        return weather_data
+    if not weather_data:
+        return None
 
-    return None
+    weather_data.update(aq_data)
+    weather_data.update(pollutant_data)
+
+    current_pressure = weather_data.get('pressure_hpa')
+    current_timestamp = weather_data.get('timestamp')
+    if current_pressure and current_timestamp:
+        weather_data['pressure_change_24h'] = calculate_pressure_change(
+            current_pressure,
+            current_timestamp,
+        )
+
+    return weather_data

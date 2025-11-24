@@ -1,43 +1,73 @@
 import logging
+import os
+from typing import Any, Dict
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
-# Validation rules
-VALIDATION_RULES = {
-    'external_factors': {
-        'pressure_hpa': lambda x: 900 <= x <= 1100 if x is not None else True,
-        'pressure_change_24h': lambda x: -200 <= x <= 200 if x is not None else True,  # Reasonable range for 24h change
-        'temperature': lambda x: -50 <= x <= 150 if x is not None else True,
-        'humidity': lambda x: 0 <= x <= 100 if x is not None else True,
-        'hour_of_day': lambda x: 0 <= x <= 23,
-        'day_of_week': lambda x: 1 <= x <= 7,  # ISO: Monday=1, Sunday=7
-        'weekend': lambda x: isinstance(x, bool),
-        'pm25': lambda x: 0 <= x <= 500 if x is not None else True,
-        'aqi': lambda x: 0 <= x <= 500 if x is not None else True,
-    },
-    'user_tracking': {
-        'sleep_hours': lambda x: 0 <= x <= 24,
-        'breakfast_skipped': lambda x: isinstance(x, bool),
-        'lunch_skipped': lambda x: isinstance(x, bool),
-        'phone_usage': lambda x: 0 <= x <= 500,
-        'caffeine_count': lambda x: 0 <= x <= 20,
-        'steps': lambda x: 0 <= x <= 100000,
-        'water_glasses': lambda x: 0 <= x <= 30,
-        'exercise': lambda x: isinstance(x, bool),
-        'brain_fog_score': lambda x: 1 <= x <= 10,
-        'reaction_time_ms': lambda x: 100 <= x <= 2000,
-        'verbal_memory_words': lambda x: 0 <= x <= 100,
-    }
-}
+
+def _load_validation_rules() -> Dict[str, Dict[str, Any]]:
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    config_path = os.path.join(project_root, "config", "validation_rules.yaml")
+
+    if not os.path.exists(config_path):
+        logger.warning("Validation rules config not found at %s", config_path)
+        return {}
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    return data
+
+
+VALIDATION_RULES = _load_validation_rules()
+
+
+def _build_field_validator(field_name: str, spec: Dict[str, Any]):
+    field_type = spec.get("type")
+    min_val = spec.get("min")
+    max_val = spec.get("max")
+    allow_null = spec.get("allow_null", False)
+
+    if field_type == "bool":
+        def validator(x):
+            if x is None and allow_null:
+                return True
+            return isinstance(x, bool)
+    else:
+        def validator(x):
+            if x is None:
+                return allow_null
+            try:
+                if min_val is not None and x < min_val:
+                    return False
+                if max_val is not None and x > max_val:
+                    return False
+                return True
+            except TypeError:
+                return False
+
+    return validator
+
+
+def _get_table_rules(table_name: str) -> Dict[str, Any]:
+    table_spec = VALIDATION_RULES.get(table_name)
+    if not table_spec:
+        return {}
+
+    rules = {}
+    for field, spec in table_spec.items():
+        rules[field] = _build_field_validator(field, spec or {})
+    return rules
 
 
 def validate_record(record, table_name):
-    """Validate a single record against rules for the specified table"""
     if table_name not in VALIDATION_RULES:
         logger.warning(f"No validation rules for table {table_name}")
         return True, []
 
-    rules = VALIDATION_RULES[table_name]
+    rules = _get_table_rules(table_name)
     errors = []
 
     for field, rule in rules.items():
@@ -54,7 +84,6 @@ def validate_record(record, table_name):
 
 
 def validate_batch(records, table_name):
-    """Validate a batch of records"""
     valid_records = []
     invalid_records = []
 

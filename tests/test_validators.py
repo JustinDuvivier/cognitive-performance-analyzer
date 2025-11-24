@@ -26,9 +26,9 @@ def test_validate_record_external_valid():
 def test_validate_record_external_invalid():
     record = {
         "timestamp": datetime.datetime.now(),
-        "pressure_hpa": 850,  # too low
-        "temperature": 200,  # too high
-        "humidity": 150,  # too high
+        "pressure_hpa": 850,
+        "temperature": 200,
+        "humidity": 150,
         "hour_of_day": 25,
         "day_of_week": 8,
         "weekend": "yes",
@@ -49,14 +49,15 @@ def test_validate_record_user_valid():
     record = {
         "timestamp": datetime.datetime.now(),
         "sleep_hours": 7.5,
-        "breakfast_skipped": False,
-        "lunch_skipped": False,
         "phone_usage": 100,
-        "caffeine_count": 2,
         "steps": 8000,
-        "water_glasses": 6,
-        "exercise": True,
-        "brain_fog_score": 5,
+        "screen_time_minutes": 120,
+        "active_energy_kcal": 320.0,
+        "calories_intake": 900.0,
+        "protein_g": 45.0,
+        "carbs_g": 120.0,
+        "fat_g": 30.0,
+        "sequence_memory_score": 20,
         "reaction_time_ms": 250,
         "verbal_memory_words": 20,
     }
@@ -70,17 +71,18 @@ def test_validate_record_user_valid():
 def test_validate_record_user_invalid():
     record = {
         "timestamp": datetime.datetime.now(),
-        "sleep_hours": 30,  # too high
-        "breakfast_skipped": "no",  # not bool
-        "brain_fog_score": 15,  # out of range
-        "reaction_time_ms": 50,  # too low
+        "sleep_hours": 30,
+        "screen_time_minutes": 2000,
+        "sequence_memory_score": 150,
+        "reaction_time_ms": 50,
     }
 
     is_valid, errors = validate_record(record, "user_tracking")
 
     assert is_valid is False
     assert any("sleep_hours" in e for e in errors)
-    assert any("brain_fog_score" in e for e in errors)
+    assert any("screen_time_minutes" in e for e in errors)
+    assert any("sequence_memory_score" in e for e in errors)
     assert any("reaction_time_ms" in e for e in errors)
 
 

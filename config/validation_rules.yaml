@@ -1,0 +1,101 @@
+external_factors:
+  pressure_hpa:
+    min: 900
+    max: 1100
+  pressure_change_24h:
+    min: -200
+    max: 200
+    allow_null: true
+  temperature:
+    min: -50
+    max: 150
+    allow_null: true
+  humidity:
+    min: 0
+    max: 100
+    allow_null: true
+  hour_of_day:
+    min: 0
+    max: 23
+  day_of_week:
+    min: 1
+    max: 7
+  weekend:
+    type: bool
+  pm25:
+    min: 0
+    max: 500
+    allow_null: true
+  aqi:
+    min: 0
+    max: 500
+    allow_null: true
+
+  co:
+    min: 0
+    max: 20000
+    allow_null: true
+  no:
+    min: 0
+    max: 1000
+    allow_null: true
+  no2:
+    min: 0
+    max: 1000
+    allow_null: true
+  o3:
+    min: 0
+    max: 1000
+    allow_null: true
+  so2:
+    min: 0
+    max: 1000
+    allow_null: true
+  pm10:
+    min: 0
+    max: 1000
+    allow_null: true
+  nh3:
+    min: 0
+    max: 1000
+    allow_null: true
+
+user_tracking:
+  sleep_hours:
+    min: 0
+    max: 24
+  phone_usage:
+    min: 0
+    max: 500
+  steps:
+    min: 0
+    max: 100000
+  screen_time_minutes:
+    min: 0
+    max: 1440
+  active_energy_kcal:
+    min: 0
+    max: 10000
+  calories_intake:
+    min: 0
+    max: 10000
+  protein_g:
+    min: 0
+    max: 1000
+  carbs_g:
+    min: 0
+    max: 1000
+  fat_g:
+    min: 0
+    max: 1000
+  sequence_memory_score:
+    min: 0
+    max: 100
+  reaction_time_ms:
+    min: 100
+    max: 2000
+  verbal_memory_words:
+    min: 0
+    max: 300
+
+

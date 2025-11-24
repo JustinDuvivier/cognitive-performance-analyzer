@@ -1,9 +1,3 @@
-"""
-Brain Fog Pipeline Runner
-
-Run from project root: python run_pipeline.py
-"""
-
 import sys
 import os
 import logging

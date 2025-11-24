@@ -1,0 +1,20 @@
+data_sources:
+  - name: external_factors_api
+    table_name: external_factors
+    reader: readers.api_reader.fetch_all_external_data
+    single_record: true
+    cleaner: cleaners.clean.clean_external_factors
+    prepare_for_insert: cleaners.clean.prepare_for_insert
+    loader: loaders.load.upsert_external_factors
+    validator_table: external_factors
+
+  - name: user_tracking_csv
+    table_name: user_tracking
+    reader: readers.csv_reader.read_all_user_data
+    single_record: false
+    cleaner: cleaners.clean.clean_user_tracking
+    prepare_for_insert: cleaners.clean.prepare_for_insert
+    loader: loaders.load.insert_user_tracking
+    validator_table: user_tracking
+
+

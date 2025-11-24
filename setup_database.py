@@ -1,5 +1,4 @@
 import psycopg2
-from psycopg2 import sql
 import os
 from dotenv import load_dotenv
 
@@ -46,28 +45,23 @@ def create_tables():
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS external_factors
                     (
-                        timestamp
-                        TIMESTAMP
-                        PRIMARY
-                        KEY,
-                        pressure_hpa
-                        FLOAT,
-                        pressure_change_24h
-                        FLOAT,
-                        temperature
-                        FLOAT,
-                        humidity
-                        FLOAT,
-                        hour_of_day
-                        INT,
-                        day_of_week
-                        INT,
-                        weekend
-                        BOOLEAN,
-                        pm25
-                        FLOAT,
-                        aqi
-                        INT
+                        timestamp TIMESTAMP PRIMARY KEY,
+                        pressure_hpa FLOAT,
+                        pressure_change_24h FLOAT,
+                        temperature FLOAT,
+                        humidity FLOAT,
+                        hour_of_day INT,
+                        day_of_week INT,
+                        weekend BOOLEAN,
+                        pm25 FLOAT,
+                        aqi INT,
+                        co FLOAT,
+                        no FLOAT,
+                        no2 FLOAT,
+                        o3 FLOAT,
+                        so2 FLOAT,
+                        pm10 FLOAT,
+                        nh3 FLOAT
                     )
                     """)
         print("✓ Created external_factors table")
@@ -75,39 +69,20 @@ def create_tables():
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS user_tracking
                     (
-                        timestamp
-                        TIMESTAMP
-                        PRIMARY
-                        KEY,
-                        sleep_hours
-                        FLOAT,
-                        breakfast_skipped
-                        BOOLEAN,
-                        lunch_skipped
-                        BOOLEAN,
-                        phone_usage
-                        INT,
-                        caffeine_count
-                        INT,
-                        steps
-                        INT,
-                        water_glasses
-                        INT,
-                        exercise
-                        BOOLEAN,
-                        brain_fog_score
-                        INT
-                        CHECK
-                    (
-                        brain_fog_score
-                        BETWEEN
-                        1
-                        AND
-                        10
-                    ),
+                        timestamp TIMESTAMP PRIMARY KEY,
+                        sleep_hours FLOAT,
+                        phone_usage INT,
+                        steps INT,
+                        screen_time_minutes INT,
+                        active_energy_kcal FLOAT,
+                        calories_intake FLOAT,
+                        protein_g FLOAT,
+                        carbs_g FLOAT,
+                        fat_g FLOAT,
+                        sequence_memory_score INT,
                         reaction_time_ms FLOAT,
                         verbal_memory_words INT
-                        )
+                    )
                     """)
         print("✓ Created user_tracking table")
 

@@ -1,10 +1,3 @@
-"""
-Test configuration for pytest.
-
-This ensures the src/ directory is on sys.path so tests can import
-project modules using standard imports without per-file path hacks.
-"""
-
 import os
 import sys
 

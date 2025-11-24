@@ -84,14 +84,15 @@ def test_clean_user_tracking_types_and_defaults():
     raw = {
         "timestamp": datetime.now(),
         "sleep_hours": "7.5",
-        "breakfast_skipped": "Y",
-        "lunch_skipped": "N",
         "phone_usage": "45",
-        "caffeine_count": "2",
         "steps": "5000",
-        "water_glasses": "6",
-        "exercise": "n",
-        "brain_fog_score": 4.8,
+        "screen_time_minutes": "120",
+        "active_energy_kcal": "320.5",
+        "calories_intake": "900.2",
+        "protein_g": "45.7",
+        "carbs_g": "120.3",
+        "fat_g": "30.9",
+        "sequence_memory_score": 7.8,
         "reaction_time_ms": "245",
         "verbal_memory_words": "12",
     }
@@ -100,14 +101,15 @@ def test_clean_user_tracking_types_and_defaults():
 
     assert isinstance(cleaned["timestamp"], datetime)
     assert cleaned["sleep_hours"] == 7.5
-    assert cleaned["breakfast_skipped"] is True
-    assert cleaned["lunch_skipped"] is False
     assert cleaned["phone_usage"] == 45
-    assert cleaned["caffeine_count"] == 2
     assert cleaned["steps"] == 5000
-    assert cleaned["water_glasses"] == 6
-    assert cleaned["exercise"] is False
-    assert cleaned["brain_fog_score"] == 4
+    assert cleaned["screen_time_minutes"] == 120
+    assert cleaned["active_energy_kcal"] == 320.5
+    assert cleaned["calories_intake"] == 900.2
+    assert cleaned["protein_g"] == 45.7
+    assert cleaned["carbs_g"] == 120.3
+    assert cleaned["fat_g"] == 30.9
+    assert cleaned["sequence_memory_score"] == 7
     assert cleaned["reaction_time_ms"] == 245.0
     assert cleaned["verbal_memory_words"] == 12
 

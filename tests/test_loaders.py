@@ -32,14 +32,15 @@ def test_insert_user_tracking_no_connection(monkeypatch):
         {
             "timestamp": datetime.now(),
             "sleep_hours": 7.5,
-            "breakfast_skipped": False,
-            "lunch_skipped": False,
             "phone_usage": 45,
-            "caffeine_count": 2,
             "steps": 5000,
-            "water_glasses": 6,
-            "exercise": True,
-            "brain_fog_score": 4,
+            "screen_time_minutes": 120,
+            "active_energy_kcal": 320.0,
+            "calories_intake": 900.0,
+            "protein_g": 45.0,
+            "carbs_g": 120.0,
+            "fat_g": 30.0,
+            "sequence_memory_score": 20,
             "reaction_time_ms": 245.5,
             "verbal_memory_words": 12,
         }
@@ -64,6 +65,4 @@ def test_check_table_counts_no_connection(monkeypatch):
 
     counts = load_module.check_table_counts()
     assert counts == {}
-
-
 
