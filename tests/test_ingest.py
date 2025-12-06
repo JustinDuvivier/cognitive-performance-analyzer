@@ -1,129 +1,145 @@
+import pytest
+
 import ingest
+from ingest import (
+    _format_invalid_for_rejects,
+    _validate_clean_and_load,
+    _run_measurement_external_flow,
+    _run_measurement_user_flow,
+)
 
 
-def _patch_ingest(
-    monkeypatch,
-    fake_external_flow,
-    fake_user_flow,
-    fake_log_rejected_records,
-    fake_check_table_counts,
-):
-    monkeypatch.setattr(ingest, "_run_external_factors_flow", fake_external_flow)
-    monkeypatch.setattr(ingest, "_run_user_tracking_flow", fake_user_flow)
-    monkeypatch.setattr(ingest, "log_rejected_records", fake_log_rejected_records)
-    monkeypatch.setattr(ingest, "check_table_counts", fake_check_table_counts)
+class TestFormatInvalidForRejects:
+    def test_formats_complete_invalid(self):
+        invalid = {"table": "measurements", "record": {"foo": "bar"}, "errors": ["error1", "error2"]}
+        result = _format_invalid_for_rejects(invalid)
+        assert result["table"] == "measurements"
+        assert result["error"] == "error1; error2"
+
+    def test_handles_missing_fields(self):
+        result = _format_invalid_for_rejects({})
+        assert result["table"] == "unknown"
+        assert result["error"] == "Unknown error"
 
 
-def test_run_pipeline_happy_path(monkeypatch):
-    def fake_external_flow():
-        return (
-            {
-                "name": "external_factors",
-                "read": 1,
-                "validated": 1,
-                "rejected": 0,
-                "loaded": 1,
-                "db_rejected": 0,
-            },
-            [],
-        )
+class TestValidateCleanAndLoad:
+    def test_tracks_validation_results(self, monkeypatch):
+        monkeypatch.setattr(ingest, "validate_batch", lambda r, n: (r, []))
+        stats = {"name": "test", "read": 2, "validated": 0, "rejected": 0, "loaded": 0, "db_rejected": 0}
 
-    def fake_user_flow():
-        return (
-            {
-                "name": "user_tracking",
-                "read": 2,
-                "validated": 2,
-                "rejected": 0,
-                "loaded": 2,
-                "db_rejected": 0,
-            },
-            [],
-        )
+        result_stats, _ = _validate_clean_and_load([{"a": 1}, {"b": 2}], "test", stats, [], lambda x: x, lambda x: (len(x), []))
 
-    logged_rejects = {}
+        assert result_stats["validated"] == 2
+        assert result_stats["loaded"] == 2
 
-    def fake_log_rejected_records(rejects):
-        logged_rejects["count"] = len(rejects)
-        return len(rejects)
+    def test_returns_when_all_invalid(self, monkeypatch):
+        invalid = [{"table": "t", "record": {}, "errors": ["bad"]}]
+        monkeypatch.setattr(ingest, "validate_batch", lambda r, n: ([], invalid))
+        stats = {"name": "test", "read": 1, "validated": 0, "rejected": 0, "loaded": 0, "db_rejected": 0}
 
-    def fake_check_table_counts():
-        return {"external_factors": 1, "user_tracking": 2, "stg_rejects": logged_rejects.get("count", 0)}
+        result_stats, rejected = _validate_clean_and_load([], "test", stats, [], lambda x: x, lambda x: (0, []))
 
-    _patch_ingest(
-        monkeypatch,
-        fake_external_flow,
-        fake_user_flow,
-        fake_log_rejected_records,
-        fake_check_table_counts,
-    )
+        assert result_stats["validated"] == 0
+        assert result_stats["rejected"] == 1
+        assert rejected[0]["error"] == "bad"
 
-    result = ingest.run_pipeline()
+    def test_db_rejected_added(self, monkeypatch):
+        monkeypatch.setattr(ingest, "validate_batch", lambda r, n: (r, []))
+        stats = {"name": "test", "read": 1, "validated": 0, "rejected": 0, "loaded": 0, "db_rejected": 0}
 
-    assert result["success"] is True
-    assert result["sources_processed"] == 2
-    assert result["total_read"] == 3
-    assert result["total_validated"] == 3
-    assert result["total_loaded"] == 3
-    assert result["total_rejected"] == 0
-    assert isinstance(result["duration_seconds"], float)
-    assert len(result["source_stats"]) == 2
+        result_stats, rejected = _validate_clean_and_load([{"x": 1}], "test", stats, [], lambda x: x, lambda x: (0, [{"error": "db"}]))
 
-    names = {s["name"] for s in result["source_stats"]}
-    assert names == {"external_factors", "user_tracking"}
+        assert result_stats["db_rejected"] == 1
+        assert rejected[0]["error"] == "db"
 
 
-def test_run_pipeline_with_validation_rejects(monkeypatch):
-    def fake_external_flow():
-        return (
-            {
-                "name": "external_factors",
-                "read": 1,
-                "validated": 0,
-                "rejected": 1,
-                "loaded": 0,
-                "db_rejected": 0,
-            },
-            [{"table": "external_factors", "record": {}, "error": "bad external"}],
-        )
+class TestRunMeasurementExternalFlow:
+    def test_no_data_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(ingest, "fetch_all_external_data", lambda: [])
+        stats, rejected = _run_measurement_external_flow()
+        assert stats["read"] == 0
+        assert rejected == []
 
-    def fake_user_flow():
-        return (
-            {
-                "name": "user_tracking",
-                "read": 2,
-                "validated": 1,
-                "rejected": 1,
-                "loaded": 1,
-                "db_rejected": 0,
-            },
-            [{"table": "user_tracking", "record": {}, "error": "bad user"}],
-        )
+    def test_with_data_runs_validation(self, monkeypatch):
+        monkeypatch.setattr(ingest, "fetch_all_external_data", lambda: [{"a": 1}])
+        called = {}
 
-    logged_rejects = {}
+        def fake_validate(records, name, stats, rejected, cleaner, loader):
+            called["ran"] = True
+            stats["validated"] = len(records)
+            stats["loaded"] = len(records)
+            return stats, rejected
 
-    def fake_log_rejected_records(rejects):
-        logged_rejects["items"] = rejects
-        return len(rejects)
+        monkeypatch.setattr(ingest, "_validate_clean_and_load", fake_validate)
+        stats, rejected = _run_measurement_external_flow()
 
-    def fake_check_table_counts():
-        return {}
+        assert called.get("ran") is True
+        assert stats["validated"] == 1
+        assert rejected == []
 
-    _patch_ingest(
-        monkeypatch,
-        fake_external_flow,
-        fake_user_flow,
-        fake_log_rejected_records,
-        fake_check_table_counts,
-    )
 
-    result = ingest.run_pipeline()
+class TestRunMeasurementUserFlow:
+    def test_no_data_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(ingest, "read_all_user_data", lambda: [])
+        stats, rejected = _run_measurement_user_flow()
+        assert stats["read"] == 0
+        assert rejected == []
 
-    assert result["success"] is True
-    assert result["total_read"] == 3
-    assert result["total_validated"] == 1
-    assert result["total_rejected"] == 2
+    def test_with_data_runs_validation(self, monkeypatch):
+        monkeypatch.setattr(ingest, "read_all_user_data", lambda: [{"a": 1}, {"b": 2}])
+        called = {}
 
-    assert "items" in logged_rejects
-    assert len(logged_rejects["items"]) == 2
+        def fake_validate(records, name, stats, rejected, cleaner, loader):
+            called["ran"] = True
+            stats["validated"] = len(records)
+            stats["loaded"] = len(records)
+            return stats, rejected
 
+        monkeypatch.setattr(ingest, "_validate_clean_and_load", fake_validate)
+        stats, rejected = _run_measurement_user_flow()
+
+        assert called.get("ran") is True
+        assert stats["validated"] == 2
+        assert rejected == []
+
+
+class TestRunPipeline:
+    @pytest.fixture
+    def mock_pipeline(self, monkeypatch):
+        monkeypatch.setattr(ingest, "_run_measurement_external_flow", lambda: (
+            {"name": "measurements_external", "read": 1, "validated": 1, "rejected": 0, "loaded": 1, "db_rejected": 0}, []
+        ))
+        monkeypatch.setattr(ingest, "_run_measurement_user_flow", lambda: (
+            {"name": "measurements_user", "read": 2, "validated": 2, "rejected": 0, "loaded": 2, "db_rejected": 0}, []
+        ))
+        monkeypatch.setattr(ingest, "log_rejected_records", lambda x: len(x))
+        monkeypatch.setattr(ingest, "check_table_counts", lambda: {})
+
+    def test_successful_run(self, mock_pipeline):
+        result = ingest.run_pipeline()
+        assert result["success"] is True
+        assert result["total_read"] == 3
+        assert result["total_loaded"] == 3
+
+    def test_returns_source_stats(self, mock_pipeline):
+        result = ingest.run_pipeline()
+        names = {s["name"] for s in result["source_stats"]}
+        assert names == {"measurements_external", "measurements_user"}
+
+    def test_logs_rejections_and_counts(self, monkeypatch):
+        monkeypatch.setattr(ingest, "_run_measurement_external_flow", lambda: (
+            {"name": "measurements_external", "read": 1, "validated": 1, "rejected": 1, "loaded": 0, "db_rejected": 0},
+            [{"error": "bad"}],
+        ))
+        monkeypatch.setattr(ingest, "_run_measurement_user_flow", lambda: (
+            {"name": "measurements_user", "read": 0, "validated": 0, "rejected": 0, "loaded": 0, "db_rejected": 1},
+            [{"error": "db"}],
+        ))
+        logged = {}
+        monkeypatch.setattr(ingest, "log_rejected_records", lambda records: logged.setdefault("count", len(records)) or len(records))
+        monkeypatch.setattr(ingest, "check_table_counts", lambda: {"persons": 1})
+
+        result = ingest.run_pipeline()
+
+        assert logged["count"] == 2
+        assert result["total_rejected"] == 2

@@ -11,8 +11,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from readers.api_reader import fetch_all_external_data
 from readers.csv_reader import read_all_user_data
 from validators.validate import validate_batch
-from cleaners.clean import clean_external_factors, clean_user_tracking, prepare_for_insert
-from loaders.load import upsert_external_factors, insert_user_tracking, log_rejected_records, check_table_counts
+from cleaners.clean import clean_measurement_external, clean_measurement_user, prepare_for_insert
+from loaders.load import upsert_measurement_external, update_measurement_user_data, log_rejected_records, check_table_counts
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -30,20 +31,19 @@ def _format_invalid_for_rejects(invalid: Dict[str, Any]) -> Dict[str, Any]:
 
 def _validate_clean_and_load(
     raw_records: List[Dict[str, Any]],
-    table_name: str,
+    validator_name: str,
     stats: Dict[str, Any],
     rejected: List[Dict[str, Any]],
     cleaner: Callable[[Dict[str, Any]], Dict[str, Any]],
     loader: Callable[[List[Dict[str, Any]]], Tuple[int, List[Dict[str, Any]]]],
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Shared validate → clean → load flow for a batch of records."""
-    valid, invalid = validate_batch(raw_records, table_name)
+    valid, invalid = validate_batch(raw_records, validator_name)
     stats["validated"] = len(valid)
     stats["rejected"] = len(invalid)
 
     if invalid:
         rejected.extend(_format_invalid_for_rejects(r) for r in invalid)
-        logger.warning(f"{table_name}: {len(invalid)} records failed validation")
+        logger.warning(f"{validator_name}: {len(invalid)} records failed validation")
 
     if not valid:
         return stats, rejected
@@ -60,15 +60,14 @@ def _validate_clean_and_load(
 
     if db_rejected:
         rejected.extend(db_rejected)
-        logger.warning(f"{table_name}: {len(db_rejected)} records failed to load")
+        logger.warning(f"{validator_name}: {len(db_rejected)} records failed to load")
 
     return stats, rejected
 
 
-def _run_external_factors_flow() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Run the external_factors flow."""
+def _run_measurement_external_flow() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     stats = {
-        "name": "external_factors",
+        "name": "measurements_external",
         "read": 0,
         "validated": 0,
         "rejected": 0,
@@ -77,29 +76,29 @@ def _run_external_factors_flow() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     }
     rejected: List[Dict[str, Any]] = []
 
-    logger.info("Reading external factors (weather + air quality)...")
-    record = fetch_all_external_data()
-    if record is None:
-        logger.warning("No external data fetched")
+    logger.info("Fetching external factors (weather + air quality) for all persons...")
+    raw_records = fetch_all_external_data()
+
+    if not raw_records:
+        logger.warning("No external data fetched for any person")
         return stats, rejected
 
-    raw_records = [record]
     stats["read"] = len(raw_records)
-    logger.info(f"Read {stats['read']} external record")
+    logger.info(f"Read {stats['read']} external records (one per person)")
 
     return _validate_clean_and_load(
         raw_records,
-        "external_factors",
+        "measurements_external",
         stats,
         rejected,
-        clean_external_factors,
-        upsert_external_factors,
+        clean_measurement_external,
+        upsert_measurement_external,
     )
 
 
-def _run_user_tracking_flow() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+def _run_measurement_user_flow() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     stats = {
-        "name": "user_tracking",
+        "name": "measurements_user",
         "read": 0,
         "validated": 0,
         "rejected": 0,
@@ -120,11 +119,11 @@ def _run_user_tracking_flow() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
 
     return _validate_clean_and_load(
         raw_records,
-        "user_tracking",
+        "measurements_user",
         stats,
         rejected,
-        clean_user_tracking,
-        insert_user_tracking,
+        clean_measurement_user,
+        update_measurement_user_data,
     )
 
 
@@ -135,8 +134,8 @@ def run_pipeline() -> Dict[str, Any]:
     logger.info("BRAIN FOG PIPELINE - Starting ingestion")
     logger.info("=" * 60)
 
-    external_stats, external_rejected = _run_external_factors_flow()
-    user_stats, user_rejected = _run_user_tracking_flow()
+    external_stats, external_rejected = _run_measurement_external_flow()
+    user_stats, user_rejected = _run_measurement_user_flow()
 
     all_stats = [external_stats, user_stats]
     all_rejected = external_rejected + user_rejected
@@ -178,7 +177,7 @@ def run_pipeline() -> Dict[str, Any]:
     if counts:
         logger.info("\nDatabase Counts:")
         for table, count in counts.items():
-            logger.info(f"  {table}: {count} records")
+            logger.info(f"  {table}: {count}")
 
     logger.info("=" * 60)
     logger.info("✅ PIPELINE COMPLETE")
@@ -196,6 +195,7 @@ def run_pipeline() -> Dict[str, Any]:
         "start_time": start_time,
         "end_time": end_time,
     }
+
 
 if __name__ == "__main__":
     try:

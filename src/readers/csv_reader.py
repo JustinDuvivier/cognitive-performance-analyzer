@@ -22,6 +22,10 @@ def _read_csv(default_filename: str, filepath: str | None, label: str) -> pd.Dat
         df = pd.read_csv(filepath)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
 
+        if 'person' not in df.columns:
+            logger.warning(f"{label} CSV missing 'person' column, defaulting to 'Unknown'")
+            df['person'] = 'Unknown'
+
         logger.debug(f"Read {len(df)} {label.lower()} records")
         return df
 
@@ -30,24 +34,24 @@ def _read_csv(default_filename: str, filepath: str | None, label: str) -> pd.Dat
         return pd.DataFrame()
 
 
-def read_behavioral_csv(filepath=None):
+def read_behavioral_csv(filepath: str | None = None) -> pd.DataFrame:
     return _read_csv("behavioral.csv", filepath, "Behavioral")
 
 
-def read_cognitive_csv(filepath=None):
+def read_cognitive_csv(filepath: str | None = None) -> pd.DataFrame:
     return _read_csv("cognitive.csv", filepath, "Cognitive")
 
 
-def merge_user_data(behavioral_df, cognitive_df):
+def merge_user_data(behavioral_df: pd.DataFrame, cognitive_df: pd.DataFrame) -> pd.DataFrame:
     if behavioral_df.empty or cognitive_df.empty:
         return pd.DataFrame()
 
-    merged = pd.merge(behavioral_df, cognitive_df, on='timestamp', how='inner')
+    merged = pd.merge(behavioral_df, cognitive_df, on=['person', 'timestamp'], how='inner')
     logger.debug(f"Merged {len(merged)} complete records")
     return merged
 
 
-def read_all_user_data():
+def read_all_user_data() -> list[dict]:
     behavioral = read_behavioral_csv()
     cognitive = read_cognitive_csv()
     merged = merge_user_data(behavioral, cognitive)

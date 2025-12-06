@@ -1,23 +1,35 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Any
+
 import pandas as pd
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
-def clean_timestamp(timestamp):
+def round_to_nearest_hour(dt: datetime) -> datetime:
+    rounded = dt + timedelta(minutes=30)
+    return rounded.replace(minute=0, second=0, microsecond=0)
+
+
+def clean_timestamp(timestamp: str | pd.Timestamp | datetime | None, round_to_hour: bool = True) -> datetime:
     if isinstance(timestamp, str):
-        return pd.to_datetime(timestamp)
+        dt = pd.to_datetime(timestamp).to_pydatetime()
     elif isinstance(timestamp, pd.Timestamp):
-        return timestamp.to_pydatetime()
+        dt = timestamp.to_pydatetime()
     elif isinstance(timestamp, datetime):
-        return timestamp
+        dt = timestamp
     else:
-        return datetime.now()
+        dt = datetime.now()
+    
+    if round_to_hour:
+        dt = round_to_nearest_hour(dt)
+    
+    return dt
 
 
-def safe_float(value, default=None):
+def safe_float(value: Any, default: float | None = None) -> float | None:
     if value is None or value == '':
         return default
     try:
@@ -26,7 +38,7 @@ def safe_float(value, default=None):
         return default
 
 
-def safe_int(value, default=0):
+def safe_int(value: Any, default: int | None = 0) -> int | None:
     if value is None or value == '':
         return default
     try:
@@ -35,7 +47,7 @@ def safe_int(value, default=0):
         return default
 
 
-def safe_bool(value, default=False):
+def safe_bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -43,18 +55,24 @@ def safe_bool(value, default=False):
     return bool(value) if value is not None else default
 
 
-def clean_external_factors(record):
+def clean_measurement_external(record: dict) -> dict:
     cleaned = {}
 
-    cleaned['timestamp'] = clean_timestamp(record.get('timestamp', datetime.now()))
+    if 'person_id' in record:
+        cleaned['person_id'] = safe_int(record.get('person_id'))
+    if 'person' in record:
+        cleaned['person'] = str(record.get('person', '')).strip()
+
+    cleaned['timestamp'] = clean_timestamp(record.get('timestamp', datetime.now()), round_to_hour=True)
 
     cleaned['pressure_hpa'] = safe_float(record.get('pressure_hpa'), None)
     cleaned['pressure_change_24h'] = safe_float(record.get('pressure_change_24h'), 0)
     cleaned['temperature'] = safe_float(record.get('temperature'), None)
     cleaned['humidity'] = safe_float(record.get('humidity'), None)
-    cleaned['hour_of_day'] = safe_int(record.get('hour_of_day', datetime.now().hour))
-    cleaned['day_of_week'] = safe_int(record.get('day_of_week', datetime.now().isoweekday()))  # ISO: Monday=1, Sunday=7
-    cleaned['weekend'] = safe_bool(record.get('weekend', datetime.now().isoweekday() >= 6))  # Saturday=6, Sunday=7
+
+    cleaned['hour_of_day'] = cleaned['timestamp'].hour
+    cleaned['day_of_week'] = cleaned['timestamp'].isoweekday()
+    cleaned['weekend'] = cleaned['timestamp'].isoweekday() >= 6  
 
     cleaned['pm25'] = safe_float(record.get('pm25'), None)
     cleaned['aqi'] = safe_int(record.get('aqi'), None)
@@ -70,9 +88,16 @@ def clean_external_factors(record):
     return cleaned
 
 
-def clean_user_tracking(record):
+def clean_measurement_user(record: dict) -> dict:
     cleaned = {}
-    cleaned['timestamp'] = clean_timestamp(record.get('timestamp', datetime.now()))
+
+    if 'person_id' in record:
+        cleaned['person_id'] = safe_int(record.get('person_id'))
+    if 'person' in record:
+        cleaned['person'] = str(record.get('person', '')).strip()
+
+    cleaned['timestamp'] = clean_timestamp(record.get('timestamp', datetime.now()), round_to_hour=True)
+    
     cleaned['sleep_hours'] = safe_float(record.get('sleep_hours'), 8)
     cleaned['phone_usage'] = safe_int(record.get('phone_usage'), 0)
     cleaned['steps'] = safe_int(record.get('steps'), 0)
@@ -90,28 +115,7 @@ def clean_user_tracking(record):
     return cleaned
 
 
-def merge_and_clean(external_data, user_data):
-    merged_records = []
-
-    if external_data:
-        external_df = pd.DataFrame([clean_external_factors(r) for r in external_data])
-    else:
-        external_df = pd.DataFrame()
-
-    if user_data:
-        user_df = pd.DataFrame([clean_user_tracking(r) for r in user_data])
-    else:
-        user_df = pd.DataFrame()
-
-    logger.debug(f"Cleaning {len(external_df)} external records and {len(user_df)} user records")
-
-    return (
-        external_df.to_dict('records') if not external_df.empty else [],
-        user_df.to_dict('records') if not user_df.empty else [],
-    )
-
-
-def prepare_for_insert(record):
+def prepare_for_insert(record: dict) -> dict:
     prepared = {}
 
     for key, value in record.items():

@@ -1,4 +1,10 @@
-external_factors:
+measurements_external:
+  person_id:
+    min: 1
+    max: 10000
+  person:
+    type: string
+    allow_null: true
   pressure_hpa:
     min: 900
     max: 1100
@@ -30,7 +36,6 @@ external_factors:
     min: 0
     max: 500
     allow_null: true
-
   co:
     min: 0
     max: 20000
@@ -60,7 +65,13 @@ external_factors:
     max: 1000
     allow_null: true
 
-user_tracking:
+measurements_user:
+  person_id:
+    min: 1
+    max: 10000
+  person:
+    type: string
+    allow_null: true
   sleep_hours:
     min: 0
     max: 24
@@ -97,5 +108,3 @@ user_tracking:
   verbal_memory_words:
     min: 0
     max: 300
-
-
