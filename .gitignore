@@ -28,6 +28,3 @@ htmlcov/
 .coverage
 .pytest_cache/
 
-*.csv
-data/*.csv
-!data/sample_*.csv

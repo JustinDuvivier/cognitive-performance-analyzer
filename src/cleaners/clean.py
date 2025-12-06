@@ -55,7 +55,8 @@ def safe_bool(value: Any, default: bool = False) -> bool:
     return bool(value) if value is not None else default
 
 
-def clean_measurement_external(record: dict) -> dict:
+def _clean_person_and_timestamp(record: dict) -> dict:
+    """Extract common person_id, person, and timestamp cleaning logic."""
     cleaned = {}
 
     if 'person_id' in record:
@@ -64,6 +65,12 @@ def clean_measurement_external(record: dict) -> dict:
         cleaned['person'] = str(record.get('person', '')).strip()
 
     cleaned['timestamp'] = clean_timestamp(record.get('timestamp', datetime.now()), round_to_hour=True)
+
+    return cleaned
+
+
+def clean_measurement_external(record: dict) -> dict:
+    cleaned = _clean_person_and_timestamp(record)
 
     cleaned['pressure_hpa'] = safe_float(record.get('pressure_hpa'), None)
     cleaned['pressure_change_24h'] = safe_float(record.get('pressure_change_24h'), 0)
@@ -89,14 +96,7 @@ def clean_measurement_external(record: dict) -> dict:
 
 
 def clean_measurement_user(record: dict) -> dict:
-    cleaned = {}
-
-    if 'person_id' in record:
-        cleaned['person_id'] = safe_int(record.get('person_id'))
-    if 'person' in record:
-        cleaned['person'] = str(record.get('person', '')).strip()
-
-    cleaned['timestamp'] = clean_timestamp(record.get('timestamp', datetime.now()), round_to_hour=True)
+    cleaned = _clean_person_and_timestamp(record)
     
     cleaned['sleep_hours'] = safe_float(record.get('sleep_hours'), 8)
     cleaned['phone_usage'] = safe_int(record.get('phone_usage'), 0)

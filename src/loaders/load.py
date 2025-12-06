@@ -1,14 +1,10 @@
-import psycopg2
-from psycopg2.extras import execute_values
 import logging
-import json
-import sys
-import os
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import psycopg2
+from psycopg2.extras import execute_values
 
-from config import DB_CONFIG
+from config.config import DB_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +20,7 @@ def get_db_connection() -> psycopg2.extensions.connection | None:
         return None
 
 
-def _get_person_id_with_cursor(cur, person_name: str) -> int | None:
+def _get_person_id_with_cursor(cur, person_name: str | None) -> int | None:
     if not person_name:
         return None
 
@@ -48,7 +44,7 @@ def _load_all_persons_to_cache(cur: psycopg2.extensions.cursor) -> None:
         _person_cache[row[1]] = row[0]
 
 
-def get_person_id(person_name: str) -> int | None:
+def get_person_id(person_name: str | None) -> int | None:
     if not person_name:
         return None
 
@@ -173,6 +169,39 @@ def _get_existing_measurements(cur: psycopg2.extensions.cursor, records: list[di
     return {(row[0], row[1]) for row in cur.fetchall()}
 
 
+def _resolve_person_ids(
+    cur: psycopg2.extensions.cursor,
+    records: list[dict]
+) -> tuple[list[dict], list[dict]]:
+    """Resolve person_id for records and separate valid from rejected.
+    
+    Returns:
+        A tuple of (valid_records, rejected_records).
+    """
+    _load_all_persons_to_cache(cur)
+
+    valid_records = []
+    rejected = []
+
+    for record in records:
+        person_id = record.get('person_id')
+        if not person_id and 'person' in record:
+            person_id = _person_cache.get(record['person'])
+
+        if not person_id:
+            rejected.append({
+                'record': record,
+                'error': f"Could not resolve person_id for record: {record.get('person', 'unknown')}",
+                'table': 'measurements'
+            })
+            continue
+
+        record['person_id'] = person_id
+        valid_records.append(record)
+
+    return valid_records, rejected
+
+
 def upsert_measurement_external(records: list[dict]) -> tuple[int, list[dict]]:
     if not records:
         return 0, []
@@ -182,28 +211,11 @@ def upsert_measurement_external(records: list[dict]) -> tuple[int, list[dict]]:
         return 0, records
 
     inserted = 0
-    rejected = []
+    rejected: list[dict] = []
 
     try:
         cur = conn.cursor()
-        _load_all_persons_to_cache(cur)
-
-        valid_records = []
-        for record in records:
-            person_id = record.get('person_id')
-            if not person_id and 'person' in record:
-                person_id = _person_cache.get(record['person'])
-
-            if not person_id:
-                rejected.append({
-                    'record': record,
-                    'error': f"Could not resolve person_id for record: {record.get('person', 'unknown')}",
-                    'table': 'measurements'
-                })
-                continue
-
-            record['person_id'] = person_id
-            valid_records.append(record)
+        valid_records, rejected = _resolve_person_ids(cur, records)
 
         if valid_records:
             values = [
@@ -272,7 +284,7 @@ def upsert_measurement_external(records: list[dict]) -> tuple[int, list[dict]]:
     return inserted, rejected
 
 
-def update_measurement_user_data(records: list[dict]) -> tuple[int, list[dict]]:
+def upsert_measurement_user(records: list[dict]) -> tuple[int, list[dict]]:
     if not records:
         return 0, []
 
@@ -280,68 +292,14 @@ def update_measurement_user_data(records: list[dict]) -> tuple[int, list[dict]]:
     if not conn:
         return 0, records
 
-    updated = 0
-    rejected = []
+    inserted = 0
+    rejected: list[dict] = []
 
     try:
         cur = conn.cursor()
-        _load_all_persons_to_cache(cur)
-
-        resolved_records = []
-        for record in records:
-            person_id = record.get('person_id')
-            if not person_id and 'person' in record:
-                person_id = _person_cache.get(record['person'])
-
-            if not person_id:
-                rejected.append({
-                    'record': record,
-                    'error': f"Could not resolve person_id for record: {record.get('person', 'unknown')}",
-                    'table': 'measurements'
-                })
-                continue
-
-            record['person_id'] = person_id
-            resolved_records.append(record)
-
-        existing = _get_existing_measurements(cur, resolved_records)
-
-        valid_records = []
-        for record in resolved_records:
-            person_id = record['person_id']
-            timestamp = record.get('timestamp')
-            person_name = record.get('person', f'ID:{person_id}')
-
-            if (person_id, timestamp) not in existing:
-                rejected.append({
-                    'record': record,
-                    'error': f"No measurement row exists for {person_name} at {timestamp}. External factors must be loaded first.",
-                    'table': 'measurements'
-                })
-                continue
-
-            valid_records.append(record)
+        valid_records, rejected = _resolve_person_ids(cur, records)
 
         if valid_records:
-            cur.execute("""
-                CREATE TEMP TABLE temp_user_updates (
-                    person_id INT,
-                    timestamp TIMESTAMP,
-                    sleep_hours FLOAT,
-                    phone_usage INT,
-                    steps INT,
-                    screen_time_minutes INT,
-                    active_energy_kcal FLOAT,
-                    calories_intake FLOAT,
-                    protein_g FLOAT,
-                    carbs_g FLOAT,
-                    fat_g FLOAT,
-                    sequence_memory_score INT,
-                    reaction_time_ms FLOAT,
-                    verbal_memory_words INT
-                ) ON COMMIT DROP
-            """)
-
             values = [
                 (
                     r['person_id'],
@@ -362,83 +320,43 @@ def update_measurement_user_data(records: list[dict]) -> tuple[int, list[dict]]:
                 for r in valid_records
             ]
 
-            execute_values(
-                cur,
-                """INSERT INTO temp_user_updates VALUES %s""",
-                values
-            )
+            query = """
+                INSERT INTO measurements (
+                    person_id, timestamp,
+                    sleep_hours, phone_usage, steps, screen_time_minutes,
+                    active_energy_kcal, calories_intake, protein_g, carbs_g, fat_g,
+                    sequence_memory_score, reaction_time_ms, verbal_memory_words
+                ) VALUES %s
+                ON CONFLICT (person_id, timestamp)
+                DO UPDATE SET
+                    sleep_hours = EXCLUDED.sleep_hours,
+                    phone_usage = EXCLUDED.phone_usage,
+                    steps = EXCLUDED.steps,
+                    screen_time_minutes = EXCLUDED.screen_time_minutes,
+                    active_energy_kcal = EXCLUDED.active_energy_kcal,
+                    calories_intake = EXCLUDED.calories_intake,
+                    protein_g = EXCLUDED.protein_g,
+                    carbs_g = EXCLUDED.carbs_g,
+                    fat_g = EXCLUDED.fat_g,
+                    sequence_memory_score = EXCLUDED.sequence_memory_score,
+                    reaction_time_ms = EXCLUDED.reaction_time_ms,
+                    verbal_memory_words = EXCLUDED.verbal_memory_words
+            """
 
-            cur.execute("""
-                UPDATE measurements m SET
-                    sleep_hours = t.sleep_hours,
-                    phone_usage = t.phone_usage,
-                    steps = t.steps,
-                    screen_time_minutes = t.screen_time_minutes,
-                    active_energy_kcal = t.active_energy_kcal,
-                    calories_intake = t.calories_intake,
-                    protein_g = t.protein_g,
-                    carbs_g = t.carbs_g,
-                    fat_g = t.fat_g,
-                    sequence_memory_score = t.sequence_memory_score,
-                    reaction_time_ms = t.reaction_time_ms,
-                    verbal_memory_words = t.verbal_memory_words
-                FROM temp_user_updates t
-                WHERE m.person_id = t.person_id AND m.timestamp = t.timestamp
-            """)
-
-            updated = cur.rowcount
+            execute_values(cur, query, values)
+            inserted = len(valid_records)
 
         conn.commit()
-        logger.debug(f"Batch updated {updated} measurement user records")
+        logger.debug(f"Batch inserted/updated {inserted} measurement user records")
 
     except Exception as e:
         logger.error(f"Database error: {e}")
         conn.rollback()
+        rejected.extend([{'record': r, 'error': str(e), 'table': 'measurements'} for r in records])
     finally:
         conn.close()
 
-    return updated, rejected
-
-
-def log_rejected_records(rejected_records: list[dict]) -> int:
-    if not rejected_records:
-        return 0
-
-    conn = get_db_connection()
-    if not conn:
-        return 0
-
-    logged = 0
-
-    try:
-        cur = conn.cursor()
-
-        values = [
-            (
-                reject.get('table', 'unknown'),
-                json.dumps(reject.get('record', {}), default=str),
-                reject.get('error', 'Unknown error')[:500],
-            )
-            for reject in rejected_records
-        ]
-
-        execute_values(
-            cur,
-            """INSERT INTO stg_rejects (source_name, raw_payload, reason) VALUES %s""",
-            values
-        )
-
-        logged = len(values)
-        conn.commit()
-        logger.debug(f"Batch logged {logged} rejected records")
-
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-    return logged
+    return inserted, rejected
 
 
 def check_table_counts() -> dict[str, int]:

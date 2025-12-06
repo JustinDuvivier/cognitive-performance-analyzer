@@ -1,21 +1,19 @@
-import pandas as pd
 import logging
-import os
-import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import pandas as pd
+
+from config.config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
-
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _read_csv(default_filename: str, filepath: str | None, label: str) -> pd.DataFrame:
     if filepath is None:
-        filepath = os.path.join(PROJECT_ROOT, "data", default_filename)
+        filepath = PROJECT_ROOT / "data" / default_filename
 
     try:
-        if not os.path.exists(filepath):
+        if not Path(filepath).exists():
             logger.warning(f"{label} CSV not found at {filepath}")
             return pd.DataFrame()
 
@@ -42,6 +40,10 @@ def read_cognitive_csv(filepath: str | None = None) -> pd.DataFrame:
     return _read_csv("cognitive.csv", filepath, "Cognitive")
 
 
+def read_external_csv(filepath: str | None = None) -> pd.DataFrame:
+    return _read_csv("external.csv", filepath, "External")
+
+
 def merge_user_data(behavioral_df: pd.DataFrame, cognitive_df: pd.DataFrame) -> pd.DataFrame:
     if behavioral_df.empty or cognitive_df.empty:
         return pd.DataFrame()
@@ -57,4 +59,11 @@ def read_all_user_data() -> list[dict]:
     merged = merge_user_data(behavioral, cognitive)
     if not merged.empty:
         return merged.to_dict('records')
+    return []
+
+
+def read_all_external_data() -> list[dict]:
+    external = read_external_csv()
+    if not external.empty:
+        return external.to_dict('records')
     return []

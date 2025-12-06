@@ -24,8 +24,8 @@ measurements_external:
     min: 0
     max: 23
   day_of_week:
-    min: 1
-    max: 7
+    min: 0
+    max: 6
   weekend:
     type: bool
   pm25:

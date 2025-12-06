@@ -31,7 +31,7 @@ def create_database():
     cur = conn.cursor()
 
     try:
-        cur.execute(f"SELECT 1 FROM pg_database WHERE datname = '{DB_NAME}'")
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (DB_NAME,))
         exists = cur.fetchone()
         if not exists:
             cur.execute(f'CREATE DATABASE {DB_NAME}')

@@ -1,21 +1,21 @@
 import logging
-import os
-from typing import Any, Callable
+from typing import Any
 
 import yaml
+
+from config.config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
 
 
 def _load_validation_rules() -> dict[str, dict[str, Any]]:
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    config_path = os.path.join(project_root, "config", "validation_rules.yaml")
+    config_path = PROJECT_ROOT / "src" / "config" / "validation_rules.yaml"
 
-    if not os.path.exists(config_path):
+    if not config_path.exists():
         logger.warning("Validation rules config not found at %s", config_path)
         return {}
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
     return data
@@ -24,75 +24,54 @@ def _load_validation_rules() -> dict[str, dict[str, Any]]:
 VALIDATION_RULES = _load_validation_rules()
 
 
-def _build_field_validator(field_name: str, spec: dict[str, Any]) -> Callable[[Any], bool]:
+def _validate_field(value: Any, spec: dict[str, Any]) -> bool:
+    """Check if a single field value passes its validation rules."""
     field_type = spec.get("type")
     min_val = spec.get("min")
     max_val = spec.get("max")
     allow_null = spec.get("allow_null", False)
 
+    if value is None:
+        return allow_null
+
     if field_type == "bool":
-        def validator(x: Any) -> bool:
-            if x is None and allow_null:
-                return True
-            return isinstance(x, bool)
-    else:
-        def validator(x: Any) -> bool:
-            if x is None:
-                return allow_null
-            try:
-                if min_val is not None and x < min_val:
-                    return False
-                if max_val is not None and x > max_val:
-                    return False
-                return True
-            except TypeError:
-                return False
+        return isinstance(value, bool)
 
-    return validator
+    try:
+        if min_val is not None and value < min_val:
+            return False
+        if max_val is not None and value > max_val:
+            return False
+        return True
+    except TypeError:
+        return False
 
 
-def _get_table_rules(table_name: str) -> dict[str, Callable[[Any], bool]]:
-    table_spec = VALIDATION_RULES.get(table_name)
-    if not table_spec:
-        return {}
-
-    rules = {}
-    for field, spec in table_spec.items():
-        rules[field] = _build_field_validator(field, spec or {})
-    return rules
-
-
-def validate_record(record: dict, table_name: str, rules: dict[str, Callable[[Any], bool]] | None = None) -> tuple[bool, list[str]]:
+def validate_record(record: dict, table_name: str) -> tuple[bool, list[str]]:
+    """Validate a single record against the rules for its table."""
     if table_name not in VALIDATION_RULES:
         logger.warning(f"No validation rules for table {table_name}")
         return True, []
 
-    if rules is None:
-        rules = _get_table_rules(table_name)
-    
+    table_rules = VALIDATION_RULES[table_name]
     errors = []
 
-    for field, rule in rules.items():
+    for field, spec in table_rules.items():
         if field in record:
             value = record[field]
-            try:
-                if not rule(value):
-                    errors.append(f"{field}={value} failed validation")
-            except Exception as e:
-                errors.append(f"{field}={value} caused error: {e}")
+            if not _validate_field(value, spec or {}):
+                errors.append(f"{field}={value} failed validation")
 
-    is_valid = not errors
-    return is_valid, errors
+    return len(errors) == 0, errors
 
 
 def validate_batch(records: list[dict], table_name: str) -> tuple[list[dict], list[dict]]:
+    """Validate a list of records, separating valid from invalid."""
     valid_records = []
     invalid_records = []
-    
-    rules = _get_table_rules(table_name)
 
     for record in records:
-        is_valid, errors = validate_record(record, table_name, rules)
+        is_valid, errors = validate_record(record, table_name)
         if is_valid:
             valid_records.append(record)
         else:

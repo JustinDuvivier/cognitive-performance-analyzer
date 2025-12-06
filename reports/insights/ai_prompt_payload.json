@@ -1,0 +1,80 @@
+{
+  "summary": {
+    "rows": 168
+  },
+  "top_correlations": [
+    {
+      "pair": [
+        "verbal_memory_words",
+        "protein_g"
+      ],
+      "corr": 0.9577664957930891
+    },
+    {
+      "pair": [
+        "reaction_time_ms",
+        "protein_g"
+      ],
+      "corr": 0.9428387823658599
+    },
+    {
+      "pair": [
+        "reaction_time_ms",
+        "sleep_hours"
+      ],
+      "corr": 0.941558465254322
+    },
+    {
+      "pair": [
+        "reaction_time_ms",
+        "screen_time_minutes"
+      ],
+      "corr": 0.9296837530282437
+    },
+    {
+      "pair": [
+        "reaction_time_ms",
+        "active_energy_kcal"
+      ],
+      "corr": 0.9289972507599099
+    },
+    {
+      "pair": [
+        "sequence_memory_score",
+        "active_energy_kcal"
+      ],
+      "corr": 0.9283053575500205
+    },
+    {
+      "pair": [
+        "sequence_memory_score",
+        "sleep_hours"
+      ],
+      "corr": 0.9268559387641351
+    },
+    {
+      "pair": [
+        "verbal_memory_words",
+        "sleep_hours"
+      ],
+      "corr": 0.9224795804997152
+    },
+    {
+      "pair": [
+        "sequence_memory_score",
+        "protein_g"
+      ],
+      "corr": 0.9213656155527038
+    },
+    {
+      "pair": [
+        "verbal_memory_words",
+        "active_energy_kcal"
+      ],
+      "corr": 0.9190456371746998
+    }
+  ],
+  "plots": [
+    "/Users/justinduvivier/PycharmProjects/BrainFog/reports/insights/correlation_heatmap.png"
+  ]
+}

@@ -6,6 +6,15 @@ import pytest
 import loaders.load as load_module
 
 
+@pytest.fixture
+def mock_db_connection():
+    """Create a mock database connection with cursor."""
+    mock_cursor = MagicMock()
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+    return mock_conn, mock_cursor
+
+
 class TestClearPersonCache:
     def test_clears_cache(self):
         load_module._person_cache["Test"] = 123
@@ -39,11 +48,9 @@ class TestGetAllPersons:
         monkeypatch.setattr(load_module, "get_db_connection", lambda: None)
         assert load_module.get_all_persons() == []
 
-    def test_returns_persons(self, monkeypatch):
-        mock_cursor = MagicMock()
+    def test_returns_persons(self, monkeypatch, mock_db_connection):
+        mock_conn, mock_cursor = mock_db_connection
         mock_cursor.fetchall.return_value = [(1, "Alice", "NYC", 40.7, -74.0)]
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
 
         result = load_module.get_all_persons()
@@ -56,21 +63,17 @@ class TestGetPressure24hAgo:
         monkeypatch.setattr(load_module, "get_db_connection", lambda: None)
         assert load_module.get_pressure_24h_ago(datetime.now()) is None
 
-    def test_returns_pressure(self, monkeypatch):
-        mock_cursor = MagicMock()
+    def test_returns_pressure(self, monkeypatch, mock_db_connection):
+        mock_conn, mock_cursor = mock_db_connection
         mock_cursor.fetchone.return_value = (1013.5,)
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
 
         result = load_module.get_pressure_24h_ago(datetime.now())
         assert result == pytest.approx(1013.5)
 
-    def test_returns_pressure_for_person(self, monkeypatch):
-        mock_cursor = MagicMock()
+    def test_returns_pressure_for_person(self, monkeypatch, mock_db_connection):
+        mock_conn, mock_cursor = mock_db_connection
         mock_cursor.fetchone.return_value = (1000.0,)
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
 
         result = load_module.get_pressure_24h_ago(datetime.now(), person_id=1)
@@ -87,12 +90,10 @@ class TestUpsertMeasurementExternal:
         inserted, rejected = load_module.upsert_measurement_external([{"data": "test"}])
         assert inserted == 0
 
-    def test_inserts_and_resolves_person(self, monkeypatch):
+    def test_inserts_and_resolves_person(self, monkeypatch, mock_db_connection):
         ts = datetime.now()
-        mock_cursor = MagicMock()
+        mock_conn, mock_cursor = mock_db_connection
         mock_cursor.fetchall.return_value = [(1, "Alice")]
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
 
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
         monkeypatch.setattr(load_module, "execute_values", lambda *args, **kwargs: None)
@@ -103,64 +104,40 @@ class TestUpsertMeasurementExternal:
         assert rejected == []
 
 
-class TestUpdateMeasurementUserData:
+class TestUpsertMeasurementUser:
     def test_empty_records(self):
-        updated, rejected = load_module.update_measurement_user_data([])
-        assert updated == 0 and rejected == []
+        inserted, rejected = load_module.upsert_measurement_user([])
+        assert inserted == 0 and rejected == []
 
     def test_no_connection(self, monkeypatch):
         monkeypatch.setattr(load_module, "get_db_connection", lambda: None)
-        updated, rejected = load_module.update_measurement_user_data([{"data": "test"}])
-        assert updated == 0
+        inserted, rejected = load_module.upsert_measurement_user([{"data": "test"}])
+        assert inserted == 0
 
-    def test_rejects_when_missing_external_measurement(self, monkeypatch):
+    def test_inserts_and_resolves_person(self, monkeypatch, mock_db_connection):
         ts = datetime.now()
-        mock_cursor = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
-        monkeypatch.setattr(load_module, "_get_existing_measurements", lambda cur, recs: set())
-
-        updated, rejected = load_module.update_measurement_user_data([{"person_id": 1, "timestamp": ts, "person": "Alice"}])
-
-        assert updated == 0
-        assert rejected and "No measurement row exists" in rejected[0]["error"]
-
-    def test_updates_when_existing_measurement(self, monkeypatch):
-        ts = datetime.now()
-        mock_cursor = MagicMock()
-        mock_cursor.rowcount = 1
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
+        mock_conn, mock_cursor = mock_db_connection
+        mock_cursor.fetchall.return_value = [(1, "Alice")]
 
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
-        monkeypatch.setattr(load_module, "_get_existing_measurements", lambda cur, recs: {(1, ts)})
         monkeypatch.setattr(load_module, "execute_values", lambda *args, **kwargs: None)
 
-        updated, rejected = load_module.update_measurement_user_data([{"person_id": 1, "timestamp": ts, "person": "Alice"}])
+        inserted, rejected = load_module.upsert_measurement_user([{"person": "Alice", "timestamp": ts}])
 
-        assert updated == 1
+        assert inserted == 1
         assert rejected == []
 
+    def test_rejects_unknown_person(self, monkeypatch, mock_db_connection):
+        ts = datetime.now()
+        mock_conn, mock_cursor = mock_db_connection
+        mock_cursor.fetchall.return_value = []
 
-class TestLogRejectedRecords:
-    def test_empty_records(self):
-        assert load_module.log_rejected_records([]) == 0
-
-    def test_no_connection(self, monkeypatch):
-        monkeypatch.setattr(load_module, "get_db_connection", lambda: None)
-        assert load_module.log_rejected_records([{"error": "test"}]) == 0
-
-    def test_logs_records(self, monkeypatch):
-        mock_cursor = MagicMock()
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
-        monkeypatch.setattr(load_module, "execute_values", lambda *args, **kwargs: None)
 
-        count = load_module.log_rejected_records([{"table": "t", "record": {"a": 1}, "error": "bad"}])
+        inserted, rejected = load_module.upsert_measurement_user([{"person": "Unknown", "timestamp": ts}])
 
-        assert count == 1
+        assert inserted == 0
+        assert len(rejected) == 1
 
 
 class TestCheckTableCounts:
@@ -168,11 +145,9 @@ class TestCheckTableCounts:
         monkeypatch.setattr(load_module, "get_db_connection", lambda: None)
         assert load_module.check_table_counts() == {}
 
-    def test_returns_counts(self, monkeypatch):
-        mock_cursor = MagicMock()
+    def test_returns_counts(self, monkeypatch, mock_db_connection):
+        mock_conn, mock_cursor = mock_db_connection
         mock_cursor.fetchone.return_value = (10, 100, 5, 50)
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
 
         result = load_module.check_table_counts()
