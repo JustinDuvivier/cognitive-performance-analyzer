@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/BrainFog.iml" filepath="$PROJECT_DIR$/.idea/BrainFog.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/cognitive-performance-analyzer.iml" filepath="$PROJECT_DIR$/.idea/cognitive-performance-analyzer.iml" />
     </modules>
   </component>
 </project>

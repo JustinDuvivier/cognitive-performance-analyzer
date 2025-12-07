@@ -127,7 +127,7 @@ def run_measurement_user_flow() -> tuple[dict, list]:
 
 
 def run_pipeline() -> dict:
-    start_time = log_pipeline_start("BRAIN FOG PIPELINE")
+    start_time = log_pipeline_start("COGNITIVE PERFORMANCE PIPELINE")
 
     external_stats, external_rejected = run_measurement_external_flow()
     user_stats, user_rejected = run_measurement_user_flow()
@@ -138,7 +138,7 @@ def run_pipeline() -> dict:
     if all_rejected:
         logger.info("Logging rejected records...")
         logged = log_rejected_records(all_rejected)
-        logger.info(f"Logged {logged} rejected records to stg_rejects")
+        logger.info(f"Logged {logged} rejected records to rejected_records")
 
     total_read = sum(s["read"] for s in all_stats)
     total_validated = sum(s["validated"] for s in all_stats)
@@ -147,7 +147,7 @@ def run_pipeline() -> dict:
 
     counts = check_table_counts()
 
-    log_pipeline_end("BRAIN FOG PIPELINE", start_time, {
+    log_pipeline_end("COGNITIVE PERFORMANCE PIPELINE", start_time, {
         "total_read": total_read,
         "total_validated": total_validated,
         "total_loaded": total_loaded,

@@ -53,13 +53,13 @@ def log_rejected_records(rejected_records: list[dict]) -> int:
 
         execute_values(
             cur,
-            """INSERT INTO stg_rejects (source_name, raw_payload, reason) VALUES %s""",
+            """INSERT INTO rejected_records (source_name, raw_payload, reason) VALUES %s""",
             values
         )
 
         logged = len(values)
         conn.commit()
-        logger.debug(f"Logged {logged} rejected records to stg_rejects")
+        logger.debug(f"Logged {logged} rejected records to rejected_records")
 
     except Exception as e:
         logger.error(f"Failed to log rejected records: {e}")

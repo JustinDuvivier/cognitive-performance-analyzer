@@ -68,7 +68,7 @@ def wrap_text(text: str, width: int = 90) -> str:
 def create_pdf_report():
     payload_path = REPORTS_DIR / "ai_prompt_payload.json"
     heatmap_path = REPORTS_DIR / "correlation_heatmap.png"
-    pdf_path = REPORTS_DIR / "brain_fog_report.pdf"
+    pdf_path = REPORTS_DIR / "cognitive_performance_report.pdf"
 
     if not payload_path.exists():
         raise FileNotFoundError(f"Run generate_insights.py first. Missing: {payload_path}")
@@ -87,7 +87,7 @@ def create_pdf_report():
             fig1 = plt.figure(figsize=(11, 8.5))
             fig1.patch.set_facecolor('white')
             
-            fig1.text(0.5, 0.97, "Brain Fog Analysis Report", ha="center", fontsize=20, fontweight="bold", color="#2c3e50")
+            fig1.text(0.5, 0.97, "Cognitive Performance Analysis Report", ha="center", fontsize=20, fontweight="bold", color="#2c3e50")
             fig1.text(0.5, 0.94, f"Generated: {date_str}  •  Total Measurements: {rows}", ha="center", fontsize=10, color="#7f8c8d")
             
             ax1 = fig1.add_axes([0.02, 0.10, 0.96, 0.82])

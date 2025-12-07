@@ -8,28 +8,28 @@
         "verbal_memory_words",
         "protein_g"
       ],
-      "corr": 0.9577664957930891
+      "corr": 0.9577664957930889
     },
     {
       "pair": [
         "reaction_time_ms",
         "protein_g"
       ],
-      "corr": 0.9428387823658599
+      "corr": 0.9428387823658588
     },
     {
       "pair": [
         "reaction_time_ms",
         "sleep_hours"
       ],
-      "corr": 0.941558465254322
+      "corr": 0.9415584652543229
     },
     {
       "pair": [
         "reaction_time_ms",
         "screen_time_minutes"
       ],
-      "corr": 0.9296837530282437
+      "corr": 0.929683753028243
     },
     {
       "pair": [
@@ -43,35 +43,35 @@
         "sequence_memory_score",
         "active_energy_kcal"
       ],
-      "corr": 0.9283053575500205
+      "corr": 0.928305357550021
     },
     {
       "pair": [
         "sequence_memory_score",
         "sleep_hours"
       ],
-      "corr": 0.9268559387641351
+      "corr": 0.9268559387641353
     },
     {
       "pair": [
         "verbal_memory_words",
         "sleep_hours"
       ],
-      "corr": 0.9224795804997152
+      "corr": 0.9224795804997155
     },
     {
       "pair": [
         "sequence_memory_score",
         "protein_g"
       ],
-      "corr": 0.9213656155527038
+      "corr": 0.921365615552704
     },
     {
       "pair": [
         "verbal_memory_words",
         "active_energy_kcal"
       ],
-      "corr": 0.9190456371746998
+      "corr": 0.9190456371747007
     }
   ],
   "plots": [

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_NAME = os.getenv('DB_NAME', 'brain_fog_db')
+DB_NAME = os.getenv('DB_NAME', 'cognitive_performance_db')
 
 
 def get_db_connection(database=None):
@@ -101,7 +101,7 @@ def create_tables():
         print("✓ Created measurements table")
 
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS stg_rejects (
+            CREATE TABLE IF NOT EXISTS rejected_records (
                 id SERIAL PRIMARY KEY,
                 rejected_at TIMESTAMP DEFAULT NOW(),
                 source_name TEXT,
@@ -109,7 +109,7 @@ def create_tables():
                 reason TEXT
             )
         """)
-        print("✓ Created stg_rejects table")
+        print("✓ Created rejected_records table")
 
         conn.commit()
         print("\n✓ All tables created successfully!")

@@ -373,14 +373,14 @@ def check_table_counts() -> dict[str, int]:
             SELECT 
                 (SELECT COUNT(*) FROM persons) as persons,
                 (SELECT COUNT(*) FROM measurements) as measurements,
-                (SELECT COUNT(*) FROM stg_rejects) as stg_rejects,
+                (SELECT COUNT(*) FROM rejected_records) as rejected_records,
                 (SELECT COUNT(*) FROM measurements WHERE sleep_hours IS NOT NULL) as with_user_data
         """)
 
         row = cur.fetchone()
         counts['persons'] = row[0]
         counts['measurements'] = row[1]
-        counts['stg_rejects'] = row[2]
+        counts['rejected_records'] = row[2]
         counts['measurements_with_user_data'] = row[3]
 
     except Exception as e:
