@@ -1,0 +1,12 @@
+*.ipynb linguist-detectable=false
+
+* text=auto
+
+*.py text diff=python
+
+*.png binary
+*.jpg binary
+*.pdf binary
+
+*.csv text
+

@@ -244,7 +244,13 @@ Database Counts:
 ============================================================
 ```
 
-## 📝 License
+## 🚀 Stretch Goals (Future Enhancements)
 
-This project is for educational purposes.
+| Area | Feature                                                                       |
+|------|-------------------------------------------------------------------------------|
+| **Data Expansion** | Track additional Apple Watch metrics: noise exposure, respiratory rate, stand hours. |
+| **Data Collection** | Run pipeline over longer periods (3-6 months) for more accurate correlations. |
+| **Analytics** | Add lag analysis to correlate yesterday's factors with today's performance.   |
+| **Orchestration** | Schedule automated pipeline runs using Airflow.                               |
+
 
