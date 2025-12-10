@@ -8,28 +8,28 @@
         "verbal_memory_words",
         "protein_g"
       ],
-      "corr": 0.9577664957930896
+      "corr": 0.9577664957930891
     },
     {
       "pair": [
         "reaction_time_ms",
         "protein_g"
       ],
-      "corr": 0.9428387823658603
+      "corr": 0.9428387823658599
     },
     {
       "pair": [
         "reaction_time_ms",
         "sleep_hours"
       ],
-      "corr": 0.9415584652543222
+      "corr": 0.941558465254322
     },
     {
       "pair": [
         "reaction_time_ms",
         "screen_time_minutes"
       ],
-      "corr": 0.9296837530282445
+      "corr": 0.9296837530282437
     },
     {
       "pair": [
@@ -50,31 +50,31 @@
         "sequence_memory_score",
         "sleep_hours"
       ],
-      "corr": 0.9268559387641356
+      "corr": 0.9268559387641351
     },
     {
       "pair": [
         "verbal_memory_words",
         "sleep_hours"
       ],
-      "corr": 0.9224795804997151
+      "corr": 0.9224795804997152
     },
     {
       "pair": [
         "sequence_memory_score",
         "protein_g"
       ],
-      "corr": 0.9213656155527035
+      "corr": 0.9213656155527038
     },
     {
       "pair": [
         "verbal_memory_words",
         "active_energy_kcal"
       ],
-      "corr": 0.9190456371747003
+      "corr": 0.9190456371746998
     }
   ],
   "plots": [
-    "/Users/justinduvivier/PycharmProjects/BrainFog/reports/insights/correlation_heatmap.png"
+    "reports/insights/correlation_heatmap.png"
   ]
 }

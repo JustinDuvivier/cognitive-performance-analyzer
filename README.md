@@ -132,8 +132,8 @@ jupyter notebook notebooks/demo_pipeline.ipynb
 ### Main Tables
 
 ```sql
--- Persons table
-CREATE TABLE persons (
+-- Dimension table
+CREATE TABLE dim_persons (
     person_id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     location_name TEXT,
@@ -141,10 +141,10 @@ CREATE TABLE persons (
     longitude DECIMAL(9,6)
 );
 
--- Measurements table (stores all data points)
-CREATE TABLE measurements (
-    measurement_id SERIAL PRIMARY KEY,
-    person_id INTEGER REFERENCES persons(person_id),
+-- Fact table (unified behavioral / cognitive / environmental observations)
+CREATE TABLE fact_cognitive_performance (
+    fact_id SERIAL PRIMARY KEY,
+    person_id INTEGER REFERENCES dim_persons(person_id),
     timestamp TIMESTAMP NOT NULL,
     -- Environmental factors
     pressure_hpa DECIMAL(6,2),
@@ -236,8 +236,8 @@ Total Records:
   Rejected: 0
 
 Database Counts:
-  persons: 4
-  measurements: 168
+  dim_persons: 4
+  fact_cognitive_performance: 168
   rejected_records: 0
 ============================================================
 ✅ COGNITIVE PERFORMANCE PIPELINE - COMPLETE

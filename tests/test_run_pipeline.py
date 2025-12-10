@@ -11,9 +11,9 @@ from run_pipeline import (
 
 class TestFormatInvalidForRejects:
     def test_formats_complete_invalid(self):
-        invalid_record = {"table": "measurements", "record": {"foo": "bar"}, "errors": ["error1", "error2"]}
+        invalid_record = {"table": "fact_cognitive_performance", "record": {"foo": "bar"}, "errors": ["error1", "error2"]}
         formatted = format_invalid_for_rejects(invalid_record)
-        assert formatted["table"] == "measurements"
+        assert formatted["table"] == "fact_cognitive_performance"
         assert formatted["error"] == "error1; error2"
 
     def test_handles_missing_fields(self):
@@ -139,7 +139,7 @@ class TestRunPipeline:
         ))
         logged = {}
         monkeypatch.setattr(run_pipeline, "log_rejected_records", lambda records: logged.setdefault("count", len(records)) or len(records))
-        monkeypatch.setattr(run_pipeline, "check_table_counts", lambda: {"persons": 1})
+        monkeypatch.setattr(run_pipeline, "check_table_counts", lambda: {"dim_persons": 1})
         monkeypatch.setattr(run_pipeline, "log_pipeline_start", lambda x: __import__('datetime').datetime.now())
         monkeypatch.setattr(run_pipeline, "log_pipeline_end", lambda *args: None)
 

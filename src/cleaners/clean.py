@@ -64,6 +64,14 @@ def _clean_person_and_timestamp(record: dict) -> dict:
     if 'person' in record:
         cleaned['person'] = str(record.get('person', '')).strip()
 
+    if 'location_name' in record:
+        loc = record.get('location_name')
+        cleaned['location_name'] = str(loc).strip() if loc not in [None, ''] else None
+    if 'latitude' in record:
+        cleaned['latitude'] = safe_float(record.get('latitude'), None)
+    if 'longitude' in record:
+        cleaned['longitude'] = safe_float(record.get('longitude'), None)
+
     cleaned['timestamp'] = clean_timestamp(record.get('timestamp', datetime.now()), round_to_hour=True)
 
     return cleaned

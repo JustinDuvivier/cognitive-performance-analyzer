@@ -8,8 +8,6 @@ from config.config import DB_CONFIG
 
 logger = logging.getLogger(__name__)
 
-_person_cache = {}
-
 
 def get_db_connection() -> psycopg2.extensions.connection | None:
     try:
@@ -20,36 +18,35 @@ def get_db_connection() -> psycopg2.extensions.connection | None:
         return None
 
 
-def _get_person_id_with_cursor(cur, person_name: str | None) -> int | None:
+def _upsert_person(cur: psycopg2.extensions.cursor, record: dict) -> int | None:
+    """Ensure person exists in dim_persons and return person_id."""
+    person_name = str(record.get('person', '')).strip()
     if not person_name:
         return None
 
-    if person_name in _person_cache:
-        return _person_cache[person_name]
+    location_name = record.get('location_name')
+    latitude = record.get('latitude')
+    longitude = record.get('longitude')
 
-    cur.execute("SELECT person_id FROM persons WHERE name = %s", (person_name,))
+    cur.execute(
+        """
+        INSERT INTO dim_persons (name, location_name, latitude, longitude)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (name) DO UPDATE SET
+            location_name = COALESCE(EXCLUDED.location_name, dim_persons.location_name),
+            latitude = COALESCE(EXCLUDED.latitude, dim_persons.latitude),
+            longitude = COALESCE(EXCLUDED.longitude, dim_persons.longitude)
+        RETURNING person_id
+        """,
+        (person_name, location_name, latitude, longitude),
+    )
     result = cur.fetchone()
-
-    if result:
-        _person_cache[person_name] = result[0]
-        return result[0]
-
-    logger.warning(f"Person not found: {person_name}")
-    return None
-
-
-def _load_all_persons_to_cache(cur: psycopg2.extensions.cursor) -> None:
-    cur.execute("SELECT person_id, name FROM persons")
-    for row in cur.fetchall():
-        _person_cache[row[1]] = row[0]
+    return result[0] if result else None
 
 
 def get_person_id(person_name: str | None) -> int | None:
     if not person_name:
         return None
-
-    if person_name in _person_cache:
-        return _person_cache[person_name]
 
     conn = get_db_connection()
     if not conn:
@@ -57,7 +54,9 @@ def get_person_id(person_name: str | None) -> int | None:
 
     try:
         cur = conn.cursor()
-        return _get_person_id_with_cursor(cur, person_name)
+        cur.execute("SELECT person_id FROM dim_persons WHERE name = %s", (person_name,))
+        result = cur.fetchone()
+        return result[0] if result else None
     except Exception as e:
         logger.error(f"Error looking up person: {e}")
         return None
@@ -74,14 +73,13 @@ def get_all_persons() -> list[dict]:
         cur = conn.cursor()
         cur.execute("""
             SELECT person_id, name, location_name, latitude, longitude 
-            FROM persons 
+            FROM dim_persons 
             WHERE latitude IS NOT NULL AND longitude IS NOT NULL
         """)
         results = cur.fetchall()
 
         persons = []
         for row in results:
-            _person_cache[row[1]] = row[0]
             persons.append({
                 'person_id': row[0],
                 'name': row[1],
@@ -113,7 +111,7 @@ def get_pressure_24h_ago(current_timestamp: datetime, person_id: int | None = No
         if person_id:
             query = """
                 SELECT pressure_hpa 
-                FROM measurements 
+                FROM fact_cognitive_performance 
                 WHERE timestamp BETWEEN %s AND %s 
                 AND pressure_hpa IS NOT NULL
                 AND person_id = %s
@@ -124,7 +122,7 @@ def get_pressure_24h_ago(current_timestamp: datetime, person_id: int | None = No
         else:
             query = """
                 SELECT pressure_hpa 
-                FROM measurements 
+                FROM fact_cognitive_performance 
                 WHERE timestamp BETWEEN %s AND %s 
                 AND pressure_hpa IS NOT NULL
                 ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - %s)))
@@ -142,7 +140,7 @@ def get_pressure_24h_ago(current_timestamp: datetime, person_id: int | None = No
         conn.close()
 
 
-def _get_existing_measurements(cur: psycopg2.extensions.cursor, records: list[dict]) -> set:
+def _get_existing_fact_rows(cur: psycopg2.extensions.cursor, records: list[dict]) -> set:
     if not records:
         return set()
 
@@ -161,7 +159,7 @@ def _get_existing_measurements(cur: psycopg2.extensions.cursor, records: list[di
 
     query = f"""
         SELECT person_id, timestamp 
-        FROM measurements 
+        FROM fact_cognitive_performance 
         WHERE (person_id, timestamp) IN ({placeholders})
     """
     cur.execute(query, flat_values)
@@ -178,21 +176,27 @@ def _resolve_person_ids(
     Returns:
         A tuple of (valid_records, rejected_records).
     """
-    _load_all_persons_to_cache(cur)
-
     valid_records = []
     rejected = []
 
     for record in records:
         person_id = record.get('person_id')
-        if not person_id and 'person' in record:
-            person_id = _person_cache.get(record['person'])
+        if not person_id:
+            try:
+                person_id = _upsert_person(cur, record)
+            except Exception as exc:
+                rejected.append({
+                    'record': record,
+                    'error': f"Could not resolve person_id for record: {record.get('person', 'unknown')} ({exc})",
+                    'table': 'fact_cognitive_performance'
+                })
+                continue
 
         if not person_id:
             rejected.append({
                 'record': record,
                 'error': f"Could not resolve person_id for record: {record.get('person', 'unknown')}",
-                'table': 'measurements'
+                'table': 'fact_cognitive_performance'
             })
             continue
 
@@ -243,7 +247,7 @@ def upsert_measurement_external(records: list[dict]) -> tuple[int, list[dict]]:
             ]
 
             query = """
-                INSERT INTO measurements (
+                INSERT INTO fact_cognitive_performance (
                     person_id, timestamp, pressure_hpa, pressure_change_24h,
                     temperature, humidity, hour_of_day, day_of_week, weekend,
                     pm25, aqi, co, no, no2, o3, so2, pm10, nh3
@@ -272,12 +276,12 @@ def upsert_measurement_external(records: list[dict]) -> tuple[int, list[dict]]:
             inserted = len(valid_records)
 
         conn.commit()
-        logger.debug(f"Batch inserted/updated {inserted} measurement external records")
+        logger.debug(f"Batch inserted/updated {inserted} fact external records")
 
     except Exception as e:
         logger.error(f"Database error: {e}")
         conn.rollback()
-        rejected.extend([{'record': r, 'error': str(e), 'table': 'measurements'} for r in records])
+        rejected.extend([{'record': r, 'error': str(e), 'table': 'fact_cognitive_performance'} for r in records])
     finally:
         conn.close()
 
@@ -321,7 +325,7 @@ def upsert_measurement_user(records: list[dict]) -> tuple[int, list[dict]]:
             ]
 
             query = """
-                INSERT INTO measurements (
+                INSERT INTO fact_cognitive_performance (
                     person_id, timestamp,
                     sleep_hours, phone_usage, steps, screen_time_minutes,
                     active_energy_kcal, calories_intake, protein_g, carbs_g, fat_g,
@@ -347,12 +351,12 @@ def upsert_measurement_user(records: list[dict]) -> tuple[int, list[dict]]:
             inserted = len(valid_records)
 
         conn.commit()
-        logger.debug(f"Batch inserted/updated {inserted} measurement user records")
+        logger.debug(f"Batch inserted/updated {inserted} fact user records")
 
     except Exception as e:
         logger.error(f"Database error: {e}")
         conn.rollback()
-        rejected.extend([{'record': r, 'error': str(e), 'table': 'measurements'} for r in records])
+        rejected.extend([{'record': r, 'error': str(e), 'table': 'fact_cognitive_performance'} for r in records])
     finally:
         conn.close()
 
@@ -371,17 +375,15 @@ def check_table_counts() -> dict[str, int]:
 
         cur.execute("""
             SELECT 
-                (SELECT COUNT(*) FROM persons) as persons,
-                (SELECT COUNT(*) FROM measurements) as measurements,
-                (SELECT COUNT(*) FROM rejected_records) as rejected_records,
-                (SELECT COUNT(*) FROM measurements WHERE sleep_hours IS NOT NULL) as with_user_data
+                (SELECT COUNT(*) FROM dim_persons) as dim_persons,
+                (SELECT COUNT(*) FROM fact_cognitive_performance) as fact_cognitive_performance,
+                (SELECT COUNT(*) FROM rejected_records) as rejected_records
         """)
 
         row = cur.fetchone()
-        counts['persons'] = row[0]
-        counts['measurements'] = row[1]
+        counts['dim_persons'] = row[0]
+        counts['fact_cognitive_performance'] = row[1]
         counts['rejected_records'] = row[2]
-        counts['measurements_with_user_data'] = row[3]
 
     except Exception as e:
         logger.error(f"Failed to get counts: {e}")
@@ -392,5 +394,5 @@ def check_table_counts() -> dict[str, int]:
 
 
 def clear_person_cache() -> None:
-    global _person_cache
-    _person_cache = {}
+    """No-op retained for backward compatibility (cache removed)."""
+    return None

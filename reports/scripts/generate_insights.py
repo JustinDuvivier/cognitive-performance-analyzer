@@ -27,8 +27,8 @@ def load_from_db(limit: Optional[int] = None) -> pd.DataFrame:
     conn = psycopg2.connect(**DB_CONFIG)
     query = """
         SELECT m.*, p.name AS person_name, p.location_name
-        FROM measurements m
-        LEFT JOIN persons p ON m.person_id = p.person_id
+        FROM fact_cognitive_performance m
+        LEFT JOIN dim_persons p ON m.person_id = p.person_id
         ORDER BY m.timestamp
     """
     if limit:

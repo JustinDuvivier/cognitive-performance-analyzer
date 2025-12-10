@@ -15,13 +15,6 @@ def mock_db_connection():
     return mock_conn, mock_cursor
 
 
-class TestClearPersonCache:
-    def test_clears_cache(self):
-        load_module._person_cache["Test"] = 123
-        load_module.clear_person_cache()
-        assert load_module._person_cache == {}
-
-
 class TestGetPersonId:
     @pytest.fixture(autouse=True)
     def cleanup(self):
@@ -32,15 +25,17 @@ class TestGetPersonId:
         assert load_module.get_person_id("") is None
         assert load_module.get_person_id(None) is None
 
-    def test_returns_cached_value(self):
-        load_module._person_cache["Cached"] = 999
-        assert load_module.get_person_id("Cached") == 999
-
     def test_db_error_returns_none(self, monkeypatch):
         mock_conn = MagicMock()
         mock_conn.cursor.side_effect = Exception("boom")
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
         assert load_module.get_person_id("Alice") is None
+
+    def test_returns_id_from_db(self, monkeypatch, mock_db_connection):
+        mock_conn, mock_cursor = mock_db_connection
+        mock_cursor.fetchone.return_value = (5,)
+        monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
+        assert load_module.get_person_id("Alice") == 5
 
 
 class TestGetAllPersons:
@@ -147,11 +142,13 @@ class TestCheckTableCounts:
 
     def test_returns_counts(self, monkeypatch, mock_db_connection):
         mock_conn, mock_cursor = mock_db_connection
-        mock_cursor.fetchone.return_value = (10, 100, 5, 50)
+        mock_cursor.fetchone.return_value = (10, 100, 5)
         monkeypatch.setattr(load_module, "get_db_connection", lambda: mock_conn)
 
         result = load_module.check_table_counts()
-        assert result["persons"] == 10
+        assert result["dim_persons"] == 10
+        assert result["fact_cognitive_performance"] == 100
+        assert result["rejected_records"] == 5
 
 
 class TestGetDbConnection:
@@ -171,21 +168,9 @@ class TestHelperFunctions:
         yield
         load_module.clear_person_cache()
 
-    def test_get_person_id_with_cursor(self):
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (123,)
-        result = load_module._get_person_id_with_cursor(mock_cursor, "User")
-        assert result == 123
-
-    def test_load_all_persons_to_cache(self):
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [(1, "Alice"), (2, "Bob")]
-        load_module._load_all_persons_to_cache(mock_cursor)
-        assert load_module._person_cache["Alice"] == 1
-
-    def test_get_existing_measurements(self):
+    def test_get_existing_fact_rows(self):
         mock_cursor = MagicMock()
         ts = datetime.now()
         mock_cursor.fetchall.return_value = [(1, ts)]
-        result = load_module._get_existing_measurements(mock_cursor, [{"person_id": 1, "timestamp": ts}])
+        result = load_module._get_existing_fact_rows(mock_cursor, [{"person_id": 1, "timestamp": ts}])
         assert (1, ts) in result

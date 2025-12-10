@@ -23,7 +23,7 @@ def get_ai_summary(payload: dict) -> str:
     prompt = f"""
 You are a data analyst creating a professional report. Summarize correlations between cognitive scores and environmental/behavioral factors.
 
-Dataset: {rows} measurements
+Dataset: {rows} records
 Top correlations (absolute values):
 {top_corr}
 
@@ -88,7 +88,7 @@ def create_pdf_report():
             fig1.patch.set_facecolor('white')
             
             fig1.text(0.5, 0.97, "Cognitive Performance Analysis Report", ha="center", fontsize=20, fontweight="bold", color="#2c3e50")
-            fig1.text(0.5, 0.94, f"Generated: {date_str}  •  Total Measurements: {rows}", ha="center", fontsize=10, color="#7f8c8d")
+            fig1.text(0.5, 0.94, f"Generated: {date_str}  •  Total Records: {rows}", ha="center", fontsize=10, color="#7f8c8d")
             
             ax1 = fig1.add_axes([0.02, 0.10, 0.96, 0.82])
             img = plt.imread(str(heatmap_path))

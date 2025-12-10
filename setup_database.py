@@ -51,7 +51,7 @@ def create_tables():
 
     try:
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS persons (
+            CREATE TABLE IF NOT EXISTS dim_persons (
                 person_id SERIAL PRIMARY KEY,
                 name VARCHAR(100) NOT NULL UNIQUE,
                 location_name VARCHAR(100),
@@ -60,12 +60,12 @@ def create_tables():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
-        print("✓ Created persons table")
+        print("✓ Created dim_persons table")
 
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS measurements (
-                id SERIAL PRIMARY KEY,
-                person_id INT NOT NULL REFERENCES persons(person_id),
+            CREATE TABLE IF NOT EXISTS fact_cognitive_performance (
+                fact_id SERIAL PRIMARY KEY,
+                person_id INT NOT NULL REFERENCES dim_persons(person_id),
                 timestamp TIMESTAMP NOT NULL,
                 pressure_hpa FLOAT,
                 pressure_change_24h FLOAT,
@@ -98,7 +98,7 @@ def create_tables():
                 UNIQUE(person_id, timestamp)
             )
         """)
-        print("✓ Created measurements table")
+        print("✓ Created fact_cognitive_performance table (unified behavioral / cognitive / environmental facts)")
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS rejected_records (
@@ -122,42 +122,7 @@ def create_tables():
         conn.close()
 
 
-def seed_persons():
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    persons = [
-        ('Justin', 'Teaneck, NJ', 40.8879, -74.0159),
-        ('Emily', 'Suffern, NY', 41.1148, -74.1490),
-        ('Melanie', 'Suffern, NY', 41.1148, -74.1490),
-        ('Deshaun', 'Orange, NJ', 40.7707, -74.2323),
-    ]
-
-    try:
-        for name, location, lat, lon in persons:
-            cur.execute("""
-                INSERT INTO persons (name, location_name, latitude, longitude)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (name) DO UPDATE SET
-                    location_name = EXCLUDED.location_name,
-                    latitude = EXCLUDED.latitude,
-                    longitude = EXCLUDED.longitude
-            """, (name, location, lat, lon))
-            print(f"✓ Added/updated person: {name} ({location})")
-
-        conn.commit()
-        print("\n✓ All persons seeded successfully!")
-
-    except Exception as e:
-        print(f"Error seeding persons: {e}")
-        conn.rollback()
-    finally:
-        cur.close()
-        conn.close()
-
-
 if __name__ == "__main__":
     create_database()
     create_tables()
-    seed_persons()
     print("\nDatabase setup complete!")
